@@ -1,2 +1,1 @@
-from . import contact
-from . import reply_keyboard
+from . import menu

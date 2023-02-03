@@ -1,19 +1,24 @@
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
 from loader import bot
 from telegram_bot_calendar import DetailedTelegramCalendar
-from typing import List, Tuple
+from config_data import easy_travel
+from keyboards.reply.menu import button_menu
 
 
-def city_choose(city_lst: List[Tuple[str, str, str]], message: Message,
+def city_choose(city_lst: list[tuple[str, str, str]], message: Message,
                 region_db: bool = False) -> None:
-    """Функция генерирует инлайн клавиатуру с найденными городами по запросу пользователя."""
+    """
+    Функция генерирует инлайн клавиатуру с найденными городами по запросу пользователя.
+    :param city_lst: Список кортежей (Город, Старна и Уникального номера города)
+    :param message: Message.
+    :param region_db: True or False. True такой город уже искали, список город будет загружен из базы данных.
+    """
 
     keyboard = InlineKeyboardMarkup()
     if not city_lst:
-        bot.edit_message_text(chat_id=message.chat.id,
-                              message_id=message.message_id-1,
-                              text='нет городов\n'
-                                   'Какой город Вас интересует?')
+        bot.delete_message(chat_id=message.chat.id, message_id=message.message_id-1)
+        bot.send_message(chat_id=message.chat.id, text=easy_travel.get('no_city'), reply_markup=button_menu())
+
     else:
         for elem in city_lst:
             city_name = f'{elem[0]}, {elem[1]}'
@@ -55,6 +60,8 @@ def count_object() -> InlineKeyboardMarkup:
 
 
 class MyCalendar(DetailedTelegramCalendar):
+    """Класс MyCalendar. Родительский класс DetailedTelegramCalendar.
+    Добавляет стрелочки и убирает пустые года, месяцы."""
     prev_button = "⬅"
     next_button = "➡"
     empty_month_button = ""
@@ -65,6 +72,9 @@ RU_STEP = {'y': 'год', 'm': 'месяц', 'd': 'день'}
 
 
 def get_calendar(is_process=False, callback_data=None, **kwargs):
+    """
+    Функция выводит инлайн календарь для выбора даты.
+    """
 
     if is_process:
         result, key, step = MyCalendar(calendar_id=kwargs['calendar_id'],
@@ -85,7 +95,14 @@ def get_calendar(is_process=False, callback_data=None, **kwargs):
         return calendar, step
 
 
-def hotel_inline(info, cur):
+def hotel_inline(info: list[list[tuple[str, str, float | int, float | int, str, str], list[str]]],
+                 cur: int) -> InlineKeyboardMarkup:
+    """
+    Функция выводит инлайн клавиатура для показа найденных отелей или отелей из истории.
+    :param info: Найденные отели и информация об отеле.
+    :param cur: Порядковый номер отеля.
+    :return: InlineKeyboardMarkup
+    """
 
     site = info[cur][0][4]
     keyboard = InlineKeyboardMarkup(row_width=3)
@@ -107,7 +124,15 @@ def hotel_inline(info, cur):
     return keyboard.add(*buttons)
 
 
-def photos(info, cur, num_hotel) -> InlineKeyboardMarkup:
+def photos(info: list[list[tuple[str, str, float | int, float | int, str, str], list[str]]],
+           cur: int, num_hotel: int) -> InlineKeyboardMarkup:
+    """
+    Функция выводит инлайн клавиатура для показа фотографий.
+    :param info: Найденные отели и информация об отеле.
+    :param cur: Порядковый номер фотографии.
+    :param num_hotel: Порядковый номер отеля.
+    :return: InlineKeyboardMarkup
+    """
 
     keyboard = InlineKeyboardMarkup(row_width=3)
     buttons = [InlineKeyboardButton(text='', callback_data='None'),

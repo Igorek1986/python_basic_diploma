@@ -8,7 +8,6 @@ from rapid_api import get_region_names, get_address_photo
 from keyboards.inline.inline_keyboard import city_choose, get_calendar, MyCalendar, RU_STEP, yes_no, count_object
 from config_data import easy_travel
 from database import db
-from sqlite3 import OperationalError
 from keyboards.inline.price_inline_keyboard import KeyboardNumber
 import os
 from handlers.custom_heandlers.result import get_hotel_info, send_info_hotel
@@ -20,7 +19,10 @@ from collections.abc import Callable
                                                            '/highprice', '/bestdeal'])
 def user_info_hotel(message: Message) -> None:
 
-    """Функция запроса города. Для поиска отеля."""
+    """
+    Функция запроса города. Для поиска отеля.
+    :param message: команда полученная от пользователя.
+    """
     if message.text in ['/lowprice', 'ТОП дешевых']:
         command = '/lowprice'
     elif message.text in ['/highprice', 'ТОП дорогих']:
@@ -35,7 +37,7 @@ def user_info_hotel(message: Message) -> None:
     except ApiTelegramException:
         pass
     bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-    bot.send_message(chat_id=message.chat.id, text=easy_travel['city'])
+    bot.send_message(chat_id=message.chat.id, text=easy_travel.get('city'))
 
     with bot.retrieve_data(user_id=message.from_user.id, chat_id=message.chat.id) as data:
 
@@ -50,12 +52,12 @@ def user_info_hotel(message: Message) -> None:
 @bot.message_handler(func=lambda message: message.text == 'История \U0001F4D7' or message.text == '/history')
 def history(message: Message) -> None:
 
-    """Функция запроса истории поиска отелей пользователем."""
+    """
+    Функция запроса истории поиска отелей пользователем.
+    :param message: команда полученная от пользователя.
+    """
     if message.text == 'История \U0001F4D7':
-        # try:
         bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - 1)
-        # except ApiTelegramException:
-        #     pass
 
     bot.set_state(chat_id=message.chat.id, user_id=message.from_user.id, state=InfoHotel.hotel)
     user_id = str(message.from_user.id)
@@ -74,7 +76,7 @@ def history(message: Message) -> None:
 
         answer = yes_no()
         bot.send_message(chat_id=message.chat.id,
-                         text=f'История поиска отелей\nНайдено отелей: {len(data["hotels"])}\n'
+                         text=f'История поиска отелей\nНайдено отелей: {len(data.get("hotels"))}\n'
                               f'Показать подробности об отелях?', reply_markup=answer)
     else:
         bot.send_message(chat_id=message.chat.id, text='История не найдена')
@@ -83,7 +85,10 @@ def history(message: Message) -> None:
 @bot.callback_query_handler(state=InfoHotel.hotel, func=lambda call: call.data == "yes")
 def view_history(call: CallbackQuery) -> None:
 
-    """Функция выводит последние найденные отели. Максим 10 последних."""
+    """
+    Функция выводит последние найденные отели. Максим 10 последних.
+    :param call: yes.
+    """
     with bot.retrieve_data(user_id=call.from_user.id, chat_id=call.message.chat.id) as data:
         data['msg_id'] = call.message.message_id
     send_info_hotel(call, back=False)
@@ -92,9 +97,12 @@ def view_history(call: CallbackQuery) -> None:
 @bot.message_handler(state=InfoHotel.city)
 def clarify_city(message: Message) -> None:
 
-    """Функция поиска города.
+    """
+    Функция поиска города.
     Проверка аналогичных запросов, если такой город уже искали, будут показаны данные из локальной базы.
-    Выводит список городов, для уточнения нужного города."""
+    Выводит список городов, для уточнения нужного города.
+    :param message: Город введенный пользователем.
+    """
 
     with bot.retrieve_data(user_id=message.from_user.id, chat_id=message.chat.id) as data:
         data['msg'] = message
@@ -107,22 +115,19 @@ def clarify_city(message: Message) -> None:
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id-1,
                           text=easy_travel.get('performing_search'))
     sleep(1)
-    try:
-        need_update = db.check_update(message.text.lower())
-        city = db.select_first_response(message.text.lower())
-        if need_update:
-            raise OperationalError
-        elif city:
-            city_choose(city, message, region_db=True)
-        else:
-            raise OperationalError
+    need_update = db.check_update(message.text.lower())
 
-    except OperationalError:
+    if need_update:
         city = get_region_names(message)
         db.write_search_city(message.text)
         db.need_update(num_bool='0', text=message.text.lower())
         city_choose(city, message)
+        db.write_country(city)
         db.write_region_names(message.text.lower(), city)
+
+    else:
+        city = db.select_region(message.text.lower())
+        city_choose(city, message, region_db=True)
 
     bot.set_state(user_id=message.from_user.id, state=InfoHotel.city_id, chat_id=message.chat.id)
 
@@ -130,11 +135,14 @@ def clarify_city(message: Message) -> None:
 @bot.callback_query_handler(state=InfoHotel.city_id, func=None)
 def get_city_id(call: CallbackQuery) -> None:
 
-    """Функция получения уникального ключа города или необходимость обновить список с помощью инлайн клавиатуры.
-    Отправляет инлайн клавиатуру для выбора даты заезда"""
+    """
+    Функция получения уникального ключа города или необходимость обновить список с помощью инлайн клавиатуры.
+    Отправляет инлайн клавиатуру для выбора даты заезда.
+    :param call: id города или update.
+    """
 
     with bot.retrieve_data(user_id=call.from_user.id, chat_id=call.message.chat.id) as data:
-        msg = data['msg']
+        msg = data.get('msg')
         data['city_id'] = call.data
 
     if call.data == 'update':
@@ -145,9 +153,9 @@ def get_city_id(call: CallbackQuery) -> None:
 
         bot.set_state(user_id=call.from_user.id, state=InfoHotel.check_in, chat_id=call.message.chat.id)
         calendar, step = get_calendar(calendar_id=1,
-                                      current_date=easy_travel['today'],
-                                      min_date=easy_travel['today'],
-                                      max_date=easy_travel['today'] + timedelta(days=easy_travel.get('max_date')),
+                                      current_date=easy_travel.get('today'),
+                                      min_date=easy_travel.get('today'),
+                                      max_date=easy_travel.get('today') + timedelta(days=easy_travel.get('max_date')),
                                       locale='ru')
         bot.edit_message_text(chat_id=call.from_user.id,
                               message_id=call.message.message_id,
@@ -158,13 +166,16 @@ def get_city_id(call: CallbackQuery) -> None:
 @bot.callback_query_handler(func=MyCalendar.func(calendar_id=1))
 def get_check_in(call: CallbackQuery) -> None:
 
-    """Функция получения даты заезда. Минимальная дата ограничена текущим днем.
-    После выводиться инлайн клавиатура для выбора даты выезда"""
+    """
+    Функция получения даты заезда. Минимальная дата ограничена текущим днем.
+    После выводиться инлайн клавиатура для выбора даты выезда.
+    :param call: календарь.
+    """
 
     result, key, step = get_calendar(calendar_id=1,
-                                     current_date=easy_travel['today'],
-                                     min_date=easy_travel['today'],
-                                     max_date=easy_travel['today'] + timedelta(days=easy_travel['max_date']),
+                                     current_date=easy_travel.get('today'),
+                                     min_date=easy_travel.get('today'),
+                                     max_date=easy_travel.get('today') + timedelta(days=easy_travel.get('max_date')),
                                      locale='ru',
                                      is_process=True,
                                      callback_data=call)
@@ -184,7 +195,7 @@ def get_check_in(call: CallbackQuery) -> None:
         calendar, step = get_calendar(calendar_id=2,
                                       current_date=result + timedelta(days=1),
                                       min_date=result + timedelta(days=1),
-                                      max_date=result + timedelta(days=easy_travel['max_date']),
+                                      max_date=result + timedelta(days=easy_travel.get('max_date')),
                                       locale='ru')
         sleep(1.5)
         bot.edit_message_text(chat_id=call.from_user.id,
@@ -198,13 +209,16 @@ def get_check_in(call: CallbackQuery) -> None:
 @bot.callback_query_handler(func=MyCalendar.func(calendar_id=2))
 def get_check_out(call: CallbackQuery) -> None:
 
-    """Функция получения даты выезда. Минимальная дата ограничена 180 дней от текущей даты.
+    """
+    Функция получения даты выезда. Минимальная дата ограничена 180 дней от текущей даты.
     Максимальную дату можно поправить в конфигурации.
-    Выводится инлайн клавиатура с кол-вом отелей."""
+    Выводится инлайн клавиатура с кол-вом отелей.
+    :param call: календарь.
+    """
 
     with bot.retrieve_data(user_id=call.from_user.id, chat_id=call.message.chat.id) as data:
-        min_day = data['check_in'] + timedelta(days=1)
-        max_day = data['check_in'] + timedelta(days=180)
+        min_day = data.get('check_in') + timedelta(days=1)
+        max_day = data.get('check_in') + timedelta(days=180)
     result, key, step = get_calendar(calendar_id=2,
                                      current_date=min_day,
                                      min_date=min_day,
@@ -236,7 +250,10 @@ def get_check_out(call: CallbackQuery) -> None:
 @bot.callback_query_handler(state=InfoHotel.count_hotels, func=lambda call: call)
 def hotel_count(call: CallbackQuery) -> None:
 
-    """Функция ловит кол-во отелей. Выводится инлайн клавиатура с запросом необходимости фотографий"""
+    """
+    Функция ловит кол-во отелей. Выводится инлайн клавиатура с запросом необходимости фотографий.
+    :param call: количество отелей (int).
+    """
 
     with bot.retrieve_data(user_id=call.from_user.id, chat_id=call.message.chat.id) as data:
         data['count_hotels'] = int(call.data)
@@ -251,7 +268,11 @@ def hotel_count(call: CallbackQuery) -> None:
 @bot.callback_query_handler(state=InfoHotel.count_foto, func=lambda call: call.data == "yes")
 def foto(call: CallbackQuery) -> None:
 
-    """Функция запрашивает кол-во фотографий, для этого выводится инлайн клавиатура."""
+    """
+    Функция запрашивает кол-во фотографий, для этого выводится инлайн клавиатура.
+    :param call: yes.
+    :return:
+    """
 
     bot.set_state(user_id=call.from_user.id, state=InfoHotel.hotel, chat_id=call.message.chat.id)
     count = count_object()
@@ -282,8 +303,10 @@ def check_command(func: Callable) -> Callable:
 @bot.callback_query_handler(state=InfoHotel.count_foto, func=lambda call: call.data == "no")
 @check_command
 def photo_pass(call: CallbackQuery) -> CallbackQuery:
-    """Функция ловит ответ "нет" из инлайн клавиатуры, присваивается 0 для кол-ва фотографий.
-    :return call"""
+    """
+    Функция ловит ответ "нет" из инлайн клавиатуры, присваивается 0 для кол-ва фотографий.
+    :param call: no.
+    """
 
     bot.set_state(user_id=call.from_user.id, state=InfoHotel.hotel, chat_id=call.message.chat.id)
     with bot.retrieve_data(user_id=call.from_user.id, chat_id=call.message.chat.id) as data:
@@ -295,8 +318,10 @@ def photo_pass(call: CallbackQuery) -> CallbackQuery:
 @bot.callback_query_handler(state=InfoHotel.hotel, func=lambda call: call)
 @check_command
 def count_foto(call: CallbackQuery) -> CallbackQuery:
-    """Функция ловит ответ кол-во фотографий из инлайн клавиатуры.
-        :return call"""
+    """
+    Функция ловит ответ кол-во фотографий из инлайн клавиатуры.
+    :param call: количество фотографий (int).
+    """
 
     with bot.retrieve_data(user_id=call.from_user.id, chat_id=call.message.chat.id) as data:
         data['count_foto'] = call.data
@@ -305,7 +330,11 @@ def count_foto(call: CallbackQuery) -> CallbackQuery:
 
 
 def bestdeal(call: CallbackQuery) -> None:
-    """Функция выводит инлайн клавиатуру для получения минимальной стоимости номера"""
+    """
+    Функция выводит инлайн клавиатуру для получения минимальной стоимости номера.
+    :param call: клавиатура.
+    :return:
+    """
 
     keyboard_min_price = KeyboardNumber()
     with bot.retrieve_data(user_id=call.from_user.id, chat_id=call.message.chat.id) as data:
@@ -319,13 +348,15 @@ def bestdeal(call: CallbackQuery) -> None:
 
 
 def hotel(call: CallbackQuery) -> None:
-    """Функция обрабатывает полученные данные от пользователя, делает запрос к базе данных.
-    Если в базе данных нет адреса, то делается запрос на получение и запись адреса и фотографий."""
+    """
+    Функция обрабатывает полученные данные от пользователя, делает запрос к базе данных.
+    Если в базе данных нет адреса, то делается запрос на получение и запись адреса и фотографий.
+    """
 
     with bot.retrieve_data(user_id=call.from_user.id, chat_id=call.message.chat.id) as data:
 
-        command = data['command']
-        count_hotels = data['count_hotels']
+        command = data.get('command')
+        count_hotels = data.get('count_hotels')
         data['count_nights'] = (data.get('check_out') - data.get('check_in')).days
         min_price = data.get('min_price')
         max_price = data.get('max_price')
@@ -334,7 +365,7 @@ def hotel(call: CallbackQuery) -> None:
         check_out = data.get('check_out')
         data['number'] = -1
         data['number_photo'] = 0
-        msg_id = data['msg_id']
+        msg_id = data.get('msg_id')
 
     bot.edit_message_text(chat_id=call.message.chat.id,
                           message_id=msg_id,
@@ -360,7 +391,7 @@ def min_price_hotel(call: CallbackQuery) -> None:
     Выводит инлайн клавиатуру для получения максимальной стоимости отеля."""
 
     with bot.retrieve_data(user_id=call.from_user.id, chat_id=call.message.chat.id) as data:
-        keyboard_min_price = data['keyboard_min_price']
+        keyboard_min_price = data.get('keyboard_min_price')
 
     keyboard_min_price.get_price(call)
     keyboard_max_price = KeyboardNumber()
@@ -381,7 +412,7 @@ def max_price_hotel(call: CallbackQuery) -> None:
     Выполняется функция "hotel"."""
 
     with bot.retrieve_data(user_id=call.from_user.id, chat_id=call.message.chat.id) as data:
-        keyboard_max_price = data['keyboard_max_price']
+        keyboard_max_price = data.get('keyboard_max_price')
 
     min_pr = data.get("min_price")
     max_pr = float(keyboard_max_price.get_value())
@@ -396,6 +427,7 @@ def max_price_hotel(call: CallbackQuery) -> None:
         data['msg_id'] = msg.message_id
 
         sleep(0.5)
+        bot.set_state(user_id=call.from_user.id, chat_id=call.message.chat.id, state=InfoHotel.hotel)
         hotel(call=call)
 
     elif call.data == 'OK' and max_pr <= min_pr:

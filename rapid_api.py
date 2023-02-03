@@ -1,9 +1,7 @@
-from typing import List, Tuple
 from config_data import config
 from telebot.types import Message
 import requests
 import json
-
 
 city_url = "https://hotels4.p.rapidapi.com/locations/v3/search"
 hotel_url = "https://hotels4.p.rapidapi.com/properties/v2/list"
@@ -15,19 +13,33 @@ headers = {
     }
 
 
-def get_region_names(message: Message) -> List[Tuple[str, str, str]]:
+def get_region_names(message: Message) -> list[tuple[str, str, str]]:
+    """
+    Функция получает список городов.
+    :param message: Сообщение пользователя.
+    :return: Список кортежей состоящих из (Города, Старны и Уникального номера города).
+    """
     querystring = {"q": message.text, "locale": "ru_RU", "langid": "1033", "siteid": "300000001"}
-    response = requests.request("GET", url=city_url,
-                                headers=headers,
-                                params=querystring,
-                                timeout=10)
+    while True:
+        try:
+            response = requests.request("GET", url=city_url,
+                                        headers=headers,
+                                        params=querystring,
+                                        timeout=10)
+            data_json = json.loads(response.text)
+            data = _search_city(data_json)
 
-    data_json = json.loads(response.text)
-    data = _search_city(data_json)
-    return data
+            return data
+        except requests.exceptions.ReadTimeout:
+            pass
 
 
-def _search_city(data: json) -> List[Tuple[str, str, str]]:
+def _search_city(data: json) -> list[tuple[str, str, str]]:
+    """
+    Вспомогательная функция для get_region_names
+    :param data: JSON
+    :return: Список кортежей состоящих из (Города, Старны и Уникального номера города).
+    """
     elements = data.get('sr')
 
     city_lst = []
@@ -45,8 +57,17 @@ def _search_city(data: json) -> List[Tuple[str, str, str]]:
     return city_lst
 
 
-def get_hotels(region_id: str, user_input: tuple, price_min: int = 0,
-               price_max: int = 0) -> List[Tuple[str, str, str, str, str, str]]:
+def get_hotels(region_id: str, user_input: tuple, price_min: int | float = 0,
+               price_max: int | float = 0) -> list[tuple[str, str, int | float, int | float, str, str]]:
+    """
+    Функция получает список отелей выбранного города.
+    :param region_id: id выбранного города (str).
+    :param user_input: Дата заезда и дата выезда (tuple(datetime, datetime)).
+    :param price_min: Минимальная стоимость проживания за ночь. По умолчанию 0 (int | float).
+    :param price_max: Максимальная стоимость проживания за ночь. По умолчанию 0 (int | float).
+    :return: Список кортежей содержащих Id номер отеля, название отеля, стоимость проживания, дистанцию до центра,
+    ссылку на отель и ссылку на фотографию.
+    """
     check_in, check_out, = user_input
 
     payload = {
@@ -77,28 +98,46 @@ def get_hotels(region_id: str, user_input: tuple, price_min: int = 0,
             }
         }
     }
-    response = requests.request("POST", url=hotel_url, json=payload, headers=headers, timeout=10)
+    while True:
+        try:
+            response = requests.request("POST", url=hotel_url, json=payload, headers=headers, timeout=10)
 
-    data_json = json.loads(response.text)["data"]["propertySearch"]["properties"]
-    data = _search_hotels(data_json)
-    return data
+            data_json = json.loads(response.text)["data"]["propertySearch"]["properties"]
+            data = _search_hotels(data_json)
+            return data
+        except requests.exceptions.ReadTimeout:
+            pass
 
 
-def _search_hotels(data: json) -> List[Tuple[str, str, str, str, str, str]]:
+def _search_hotels(data: json) -> list[tuple[str, str, int | float, int | float, str, str]]:
+    """
+    Вспомогательная функция для get_hotels
+    :param data: JSON
+    :return: Список кортежей содержащих Id номер отеля, название отеля, стоимость проживания, дистанцию до центра,
+    ссылку на отель и ссылку на фотографию.
+    """
     hotels_lst = []
     for elem in data[:]:
-        hotel_id = elem.get('id')
-        name = elem.get('name')
-        amount = elem.get('price').get('lead').get('amount')
-        distance = elem.get("destinationInfo").get("distanceFromDestination").get("value")
-        hotel_link = f'https://www.hotels.com/h{hotel_id}.Hotel-Information'
-        hotel_image_link = elem.get("propertyImage").get("image").get('url')
-        _hotel = (hotel_id, name, amount, distance, hotel_link, hotel_image_link)
-        hotels_lst.append(_hotel)
+        try:
+            hotel_id = elem.get('id')
+            name = elem.get('name')
+            amount = elem.get('price').get('lead').get('amount')
+            distance = elem.get("destinationInfo").get("distanceFromDestination").get("value")
+            hotel_link = f'https://www.hotels.com/h{hotel_id}.Hotel-Information'
+            hotel_image_link = elem.get("propertyImage").get("image").get('url')
+            _hotel = (hotel_id, name, amount, distance, hotel_link, hotel_image_link)
+            hotels_lst.append(_hotel)
+        except AttributeError:
+            pass
     return hotels_lst
 
 
-def get_address_photo(hotel_id: str) -> Tuple[str, str, List[str]]:
+def get_address_photo(hotel_id: str) -> tuple[str, str, list[str]]:
+    """
+    Функция получает адрес и фотографии отеля.
+    :param hotel_id: Id отеля (str)
+    :return: кортеж состоящий из Id отеля, адреса и списка фотографий.
+    """
 
     payload = {
         "currency": "USD",
@@ -108,14 +147,23 @@ def get_address_photo(hotel_id: str) -> Tuple[str, str, List[str]]:
         "propertyId": hotel_id
     }
 
-    response = requests.request("POST", url=photo_url, json=payload, headers=headers)
-    data_json = json.loads(response.text).get('data').get('propertyInfo')
-    data = _add_address_photo_hotel(data_json)
+    while True:
+        try:
+            response = requests.request("POST", url=photo_url, json=payload, headers=headers)
+            data_json = json.loads(response.text).get('data').get('propertyInfo')
+            data = _add_address_photo_hotel(data_json)
 
-    return data
+            return data
+        except requests.exceptions.ReadTimeout:
+            pass
 
 
-def _add_address_photo_hotel(data: json) -> Tuple[str, str, List[str]]:
+def _add_address_photo_hotel(data: json) -> tuple[str, str, list[str]]:
+    """
+    Вспомогательная функция для get_address_photo.
+    :param data: JSON
+    :return: кортеж состоящий из Id отеля, адреса и списка фотографий.
+    """
     photo_lst = []
     hotel_id = data.get('summary').get('id')
     hotel_address = data.get('summary').get('location').get('address').get('addressLine')

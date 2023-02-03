@@ -1,4 +1,4 @@
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from loader import bot
 from telebot.apihelper import ApiTelegramException
 from config_data import easy_travel
@@ -11,6 +11,7 @@ class KeyboardNumber:
 
     @staticmethod
     def get_number_keyboard() -> InlineKeyboardMarkup:
+        """Функция выводит инлайн клавиатуру."""
 
         keyboard = InlineKeyboardMarkup()
         keyboard.row(InlineKeyboardButton('C', callback_data='C'),
@@ -40,7 +41,12 @@ class KeyboardNumber:
             return '0'
         return self.value
 
-    def get_price(self, call, min_p=easy_travel.get('min_price')) -> None:
+    def get_price(self, call: CallbackQuery, min_p: str = easy_travel.get('min_price')) -> None:
+        """
+        Функция получает стоимость проживания.
+        :param call: CallbackQuery
+        :param min_p: шаблон сообщения из easy_travel
+        """
         data = call.data
 
         if data == 'C':
@@ -59,7 +65,12 @@ class KeyboardNumber:
         if data != 'OK':
             self._send_message(call, min_p)
 
-    def _send_message(self, call, text):
+    def _send_message(self, call: CallbackQuery, text: str) -> None:
+        """
+        Функция выводит текуще значение стоимости.
+        :param call: CallbackQuery
+        :param text: минимальная стоимость.
+        """
 
         try:
             if self.value == '':

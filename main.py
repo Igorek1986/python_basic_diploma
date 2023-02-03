@@ -2,6 +2,11 @@ from loader import bot
 import handlers
 from telebot.custom_filters import StateFilter
 from utils.set_bot_commands import set_default_commands
+import logging
+
+
+logging.basicConfig(level=logging.INFO, filename="bot_log.log",
+                    format="%(asctime)s %(levelname)s %(message)s")
 
 
 def main():
@@ -11,4 +16,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception:
+        import traceback
+        logging.warning(traceback.format_exc())
