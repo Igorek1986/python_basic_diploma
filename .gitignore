@@ -130,3 +130,4 @@ dmypy.json
 .idea/*
 /test_db.py
 /pyvenv.cfg
+/database/hotel1.db
