@@ -13,6 +13,33 @@ headers = {
     }
 
 
+def get_json(method: str, url: str,
+             querystring: dict | None = None,
+             json_obj: dict | None = None) -> json:
+
+    """
+    Функция получает json объект с API.
+    :param method: метод зпроса GET или POST.
+    :param url: сслыка для запроса.
+    :param querystring: словарь запроса.
+    :param json_obj: словарь с данными для запроса.
+    :return: json
+    """
+
+    while True:
+
+        try:
+            response = requests.request(method, url=url,
+                                        headers=headers,
+                                        params=querystring,
+                                        json=json_obj,
+                                        timeout=10)
+
+            return response
+        except requests.exceptions.ReadTimeout:
+            pass
+
+
 def get_region_names(message: Message) -> list[tuple[str, str, str]]:
     """
     Функция получает список городов.
@@ -20,18 +47,10 @@ def get_region_names(message: Message) -> list[tuple[str, str, str]]:
     :return: Список кортежей состоящих из (Города, Старны и Уникального номера города).
     """
     querystring = {"q": message.text, "locale": "ru_RU", "langid": "1033", "siteid": "300000001"}
-    while True:
-        try:
-            response = requests.request("GET", url=city_url,
-                                        headers=headers,
-                                        params=querystring,
-                                        timeout=10)
-            data_json = json.loads(response.text)
-            data = _search_city(data_json)
-
-            return data
-        except requests.exceptions.ReadTimeout:
-            pass
+    response = get_json(method="GET", url=city_url, querystring=querystring)
+    data_json = json.loads(response.text)
+    data = _search_city(data_json)
+    return data
 
 
 def _search_city(data: json) -> list[tuple[str, str, str]]:
@@ -98,15 +117,11 @@ def get_hotels(region_id: str, user_input: tuple, price_min: int | float = 0,
             }
         }
     }
-    while True:
-        try:
-            response = requests.request("POST", url=hotel_url, json=payload, headers=headers, timeout=10)
 
-            data_json = json.loads(response.text)["data"]["propertySearch"]["properties"]
-            data = _search_hotels(data_json)
-            return data
-        except requests.exceptions.ReadTimeout:
-            pass
+    response = get_json(method="POST", url=hotel_url, json_obj=payload)
+    data_json = json.loads(response.text)["data"]["propertySearch"]["properties"]
+    data = _search_hotels(data_json)
+    return data
 
 
 def _search_hotels(data: json) -> list[tuple[str, str, int | float, int | float, str, str]]:
@@ -146,16 +161,10 @@ def get_address_photo(hotel_id: str) -> tuple[str, str, list[str]]:
         "siteId": 300000001,
         "propertyId": hotel_id
     }
-
-    while True:
-        try:
-            response = requests.request("POST", url=photo_url, json=payload, headers=headers)
-            data_json = json.loads(response.text).get('data').get('propertyInfo')
-            data = _add_address_photo_hotel(data_json)
-
-            return data
-        except requests.exceptions.ReadTimeout:
-            pass
+    response = get_json(method="POST", url=photo_url, json_obj=payload)
+    data_json = json.loads(response.text).get('data').get('propertyInfo')
+    data = _add_address_photo_hotel(data_json)
+    return data
 
 
 def _add_address_photo_hotel(data: json) -> tuple[str, str, list[str]]:
