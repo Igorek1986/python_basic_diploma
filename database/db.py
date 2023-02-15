@@ -197,7 +197,7 @@ def write_user(call: CallbackQuery) -> None:
     """
 
     from_user_id = _get_id_table('users', 'from_user_id', str(call.from_user.id))
-    if not from_user_id:
+    if from_user_id != 0:
         with sq.connect(url) as conn:
             cur = conn.cursor()
             cur.execute("""INSERT INTO users(from_user_id) VALUES (?) """, (call.from_user.id, ))
