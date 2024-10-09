@@ -131,3 +131,5 @@ dmypy.json
 /test_db.py
 /pyvenv.cfg
 /database/hotel1.db
+
+*.DS_Store

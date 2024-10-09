@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "python-basic-diploma"
+version = "0.1.0"
+description = ""
+authors = ["Igor Ponomarev <9129910001@mail.ru>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+certifi = "2022.9.24"
+pytelegrambotapi = "4.7.1"
+charset-normalizer = "2.1.1"
+idna = "3.4"
+python-dateutil = "2.8.2"
+python-dotenv = "0.21.0"
+python-telegram-bot-calendar = "1.0.5"
+requests = "2.28.1"
+six = "1.16.0"
+urllib3 = "1.26.12"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
